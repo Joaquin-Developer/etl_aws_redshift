@@ -1,13 +1,21 @@
 from typing import Tuple
+import os
 import pandas as pd
 from pandas import DataFrame
+from sqlalchemy import create_engine
+from sqlalchemy.engine import Engine
 
 import boto3
 import redshift_connector
-import os
 
 
 DEFAULT_REDSHIFT_PORT = 5439
+ENGINE_PSW = "mysecretpass"
+
+
+def get_engine() -> Engine:
+    engine = create_engine(f"postgresql+psycopg2://postgres:{ENGINE_PSW}@localhost/postgres")
+    return engine
 
 
 def clean_code(text, df_parents: DataFrame) -> Tuple[str, str]:
@@ -56,20 +64,17 @@ def get_redshift_connection():
         password=os.environ.get("redshift_pass"),
     )
 
-    cursor = conn.cursor()
+    # cursor = conn.cursor()
 
-    # return conn
-    return cursor
+    return conn
+    # return cursor
 
 
-
-def load_file(file_name):
+def load_file(file_name: str):
     table_name = file_name.split(".")[0]
     client = get_aws_connection()
     client.upload_file(
-        Filename="target/{}".format(file_name),
-        Bucket="tv-etl",
-        Key="etl_imp_prod_target/{}".format(file_name)
+        Filename="target/{}".format(file_name), Bucket="tv-etl", Key="etl_imp_prod_target/{}".format(file_name)
     )
 
     sentence = """
@@ -83,11 +88,20 @@ def load_file(file_name):
         table_name, file_name, os.environ.get("AWS_ACCESS_KEY_ID"), os.environ.get("AWS_SECRET_ACCESS_KEY")
     )
 
-    cursor = get_redshift_connection()
+    conn = get_redshift_connection()
+    cursor = conn.cursor()
 
     try:
         cursor.execute(sentence)
         print("Carga OK en la tabla", table_name)
     except:
         print("Error en la tabla", table_name)
+    finally:
+        cursor.close()
 
+
+def load_file_aws_redshift(file_name: str):
+    """
+    Load file in AWS and copy to Redshift
+    """
+    load_file(file_name)

@@ -1,25 +1,14 @@
-from typing import Dict, Tuple
+from typing import Dict
+import os
 import pandas as pd
 from pandas import DataFrame
-from sqlalchemy import create_engine
-from sqlalchemy.engine import Engine
-import os
-import boto3
-import redshift_connector
 
 from src.etl_imp_products import utils
 
 
-PSW = "mysecretpass"
-
-
-def get_engine() -> Engine:
-    engine = create_engine(f"postgresql+psycopg2://postgres:{PSW}@localhost/postgres")
-    return engine
-
 
 def extract() -> Dict[str, DataFrame]:
-    engine = get_engine()
+    engine = utils.get_engine()
     df_trades = pd.read_sql("SELECT * FROM trades", engine)
     df_countries = pd.read_json("src/country_data.json")
     df_codes = pd.read_csv("src/hs_codes.csv")
@@ -85,17 +74,19 @@ def transform(data: Dict[str, DataFrame]) -> Dict[str, DataFrame]:
 
 
 def load(dimentions: Dict[str, DataFrame]):
+    # Create csv files in local:
     dimentions["trades"].to_csv("target/trades.csv", index=False, sep="|")
-
     dimentions["countries"].to_csv("target/countries.csv", index=False, sep="|")
-
     dimentions["codes"].to_csv("target/codes.csv", index=False, sep="|")
-
     dimentions["quantity"].to_csv("target/quantity.csv", index=False, sep="|")
-
     dimentions["flow"].to_csv("target/flow.csv", index=False, sep="|")
-
     dimentions["year"].to_csv("target/year.csv", index=False, sep="|")
+
+    # Load files in AWS and Redshift:
+    list_files = os.listdir("target/")
+
+    for file_name in list_files:
+        utils.load_file_aws_redshift(file_name)
 
 
 def main():
